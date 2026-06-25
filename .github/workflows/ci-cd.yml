@@ -99,7 +99,7 @@ jobs:
             --region=${{ env.REGION }} \
             --platform=managed \
             --service-account=cloud-run-runtime-demo@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
-            --add-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
+            --set-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
             --set-secrets=DATABASE_URL=db-connection-string-demo:latest,SECRET_KEY=session-secret-demo:latest,GEMINI_API_KEY=gemini-api-key-demo:latest \
             --set-env-vars=DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=global,GEMINI_MODEL=gemini-2.5-flash \
             --vpc-connector=openisec-connector-demo \
@@ -143,22 +143,26 @@ jobs:
             --quiet
       - name: Create or Update DB Migration Job
         run: |
+          set +e
           gcloud run jobs update openisec-migrate-demo \
             --image=${{ env.API_IMAGE }} \
             --region=${{ env.REGION }} \
-            --quiet \
-          || \
-          gcloud run jobs create openisec-migrate-demo \
-            --image=${{ env.API_IMAGE }} \
-            --region=${{ env.REGION }} \
-            --service-account=cloud-run-runtime-demo@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
-            --add-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
-            --set-secrets=DATABASE_URL=db-connection-string-demo:latest \
-            --vpc-connector=openisec-connector-demo \
-            --vpc-egress=private-ranges-only \
-            --args="python,-m,alembic,upgrade,head" \
-            --max-retries=0 \
             --quiet
+          UPDATE_EXIT=$?
+          set -e
+          if [ $UPDATE_EXIT -ne 0 ]; then
+            gcloud run jobs create openisec-migrate-demo \
+              --image=${{ env.API_IMAGE }} \
+              --region=${{ env.REGION }} \
+              --service-account=cloud-run-runtime-demo@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+              --set-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
+              --set-secrets=DATABASE_URL=db-connection-string-demo:latest \
+              --vpc-connector=openisec-connector-demo \
+              --vpc-egress=private-ranges-only \
+              --args="python,-m,alembic,upgrade,head" \
+              --max-retries=0 \
+              --quiet
+          fi
       - name: Run DB Migration
         run: |
           gcloud run jobs execute openisec-migrate-demo \
