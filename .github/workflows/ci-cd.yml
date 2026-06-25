@@ -131,6 +131,34 @@ jobs:
             --memory=512Mi \
             --cpu=1 \
             --quiet
+      - name: Get Web URL and update API CORS
+        run: |
+          WEB_URL=$(gcloud run services describe openisec-web-demo \
+            --region=${{ env.REGION }} \
+            --format="value(status.url)")
+          echo "WEB_URL=$WEB_URL" >> $GITHUB_ENV
+          gcloud run services update openisec-api-demo \
+            --region=${{ env.REGION }} \
+            --update-env-vars=CORS_ORIGINS=$WEB_URL \
+            --quiet
+      - name: Create or Update DB Migration Job
+        run: |
+          gcloud run jobs update openisec-migrate-demo \
+            --image=${{ env.API_IMAGE }} \
+            --region=${{ env.REGION }} \
+            --quiet \
+          || \
+          gcloud run jobs create openisec-migrate-demo \
+            --image=${{ env.API_IMAGE }} \
+            --region=${{ env.REGION }} \
+            --service-account=cloud-run-runtime-demo@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --add-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
+            --set-secrets=DATABASE_URL=db-connection-string-demo:latest \
+            --vpc-connector=openisec-connector-demo \
+            --vpc-egress=private-ranges-only \
+            --args="python,-m,alembic,upgrade,head" \
+            --max-retries=0 \
+            --quiet
       - name: Run DB Migration
         run: |
           gcloud run jobs execute openisec-migrate-demo \
@@ -139,9 +167,6 @@ jobs:
             --quiet
       - name: Summary
         run: |
-          WEB_URL=$(gcloud run services describe openisec-web-demo \
-            --region=${{ env.REGION }} \
-            --format="value(status.url)")
           echo "## Deploy Complete (DEMO)" >> $GITHUB_STEP_SUMMARY
           echo "- API: ${{ env.API_URL }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Web: $WEB_URL" >> $GITHUB_STEP_SUMMARY
+          echo "- Web: ${{ env.WEB_URL }}" >> $GITHUB_STEP_SUMMARY

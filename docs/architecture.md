@@ -41,9 +41,9 @@ Core concept: **H / P / C / R / D / Log**
 
 | Env | GCP Project |
 |-----|-------------|
-| dev | openisec-dev-488314 |
-| stg | openisec-stg-488314 |
-| prd | openisec-prd-488314 |
+| dev | openisec-dev-XXXXXX |
+| stg | openisec-stg-XXXXXX |
+| prd | openisec-prd-XXXXXX |
 
 ---
 
