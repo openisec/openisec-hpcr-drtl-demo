@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+.pytest_cache/
+*.pyc
+
+# Node.js
+node_modules/
+.next/
+.vercel/
+out/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+terraform.tfplan
+
+# Environment variables - never commit secrets
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# GCP credentials
+*-credentials.json
+*-key.json
+service-account*.json
+application_default_credentials.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

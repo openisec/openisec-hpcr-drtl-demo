@@ -1,0 +1,147 @@
+name: CI/CD Pipeline (DEMO)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID_DEMO }}
+  REGION: ${{ secrets.GCP_REGION }}
+  REGISTRY: asia-northeast1-docker.pkg.dev
+  REPO: openisec-demo
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  snyk-scan:
+    name: Snyk Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Snyk
+        run: npm install -g snyk
+      - name: Snyk Auth
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+      - name: Snyk - API Python scan
+        run: snyk test --file=apps/api/requirements.txt --severity-threshold=high
+        continue-on-error: true
+      - name: Snyk - Web Node scan
+        run: snyk test --file=apps/web/package.json --severity-threshold=high
+        continue-on-error: true
+
+  api-test:
+    name: API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+      - name: Run tests
+        working-directory: apps/api
+        run: pytest tests/ -v --tb=short
+        continue-on-error: true
+
+  build-deploy:
+    name: Build & Deploy to DEMO
+    runs-on: ubuntu-latest
+    needs: [snyk-scan, api-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER_DEMO }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_DEMO }}
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+      - name: Build & Push API image
+        working-directory: apps/api
+        run: |
+          IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/api:${{ github.sha }}
+          docker build -t $IMAGE .
+          docker push $IMAGE
+          echo "API_IMAGE=$IMAGE" >> $GITHUB_ENV
+      - name: Build & Push Web image
+        working-directory: apps/web
+        run: |
+          IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/web:${{ github.sha }}
+          docker build -t $IMAGE \
+            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.API_URL_DEMO }} \
+            .
+          docker push $IMAGE
+          echo "WEB_IMAGE=$IMAGE" >> $GITHUB_ENV
+      - name: Deploy API to Cloud Run
+        run: |
+          gcloud run deploy openisec-api-demo \
+            --image=${{ env.API_IMAGE }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --service-account=cloud-run-runtime-demo@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --add-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
+            --set-secrets=DATABASE_URL=db-connection-string-demo:latest,SECRET_KEY=session-secret-demo:latest,GEMINI_API_KEY=gemini-api-key-demo:latest \
+            --set-env-vars=DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=global,GEMINI_MODEL=gemini-2.5-flash \
+            --vpc-connector=openisec-connector-demo \
+            --vpc-egress=private-ranges-only \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=2 \
+            --memory=512Mi \
+            --cpu=1 \
+            --timeout=60 \
+            --quiet
+      - name: Get API URL
+        run: |
+          API_URL=$(gcloud run services describe openisec-api-demo \
+            --region=${{ env.REGION }} \
+            --format="value(status.url)")
+          echo "API_URL=$API_URL" >> $GITHUB_ENV
+          echo "API deployed to: $API_URL"
+      - name: Deploy Web to Cloud Run
+        run: |
+          gcloud run deploy openisec-web-demo \
+            --image=${{ env.WEB_IMAGE }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --set-env-vars=NEXT_PUBLIC_API_URL=${{ env.API_URL }} \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=2 \
+            --memory=512Mi \
+            --cpu=1 \
+            --quiet
+      - name: Run DB Migration
+        run: |
+          gcloud run jobs execute openisec-migrate-demo \
+            --region=${{ env.REGION }} \
+            --wait \
+            --quiet
+      - name: Summary
+        run: |
+          WEB_URL=$(gcloud run services describe openisec-web-demo \
+            --region=${{ env.REGION }} \
+            --format="value(status.url)")
+          echo "## Deploy Complete (DEMO)" >> $GITHUB_STEP_SUMMARY
+          echo "- API: ${{ env.API_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Web: $WEB_URL" >> $GITHUB_STEP_SUMMARY
