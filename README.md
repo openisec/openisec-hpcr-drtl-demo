@@ -3,9 +3,11 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/openisec/openisec-hpcr-drtl-demo/releases)
 
-**HPCR-DRTL** is an open-source AI-powered decision governance platform that helps individuals and organizations make structured, auditable decisions.
+**HPCR-DRTL** is the first open-source module from [Openisec](https://openisec.com), published as a public demo and reference implementation of an AI-powered decision governance framework.
 
-> 🌐 **Live Demo**: https://openisec-web-demo-PLACEHOLDER.a.run.app
+> Openisec is not limited to HPCR-DRTL. HPCR-DRTL is the first public module to demonstrate Openisec's approach to AI-supported, human-accountable decision governance.
+
+> 🌐 **Live Demo**: https://openisec-web-demo-slec5tgzia-an.a.run.app
 >
 > To request a demo account, please contact: **admin@openisec.com**
 
@@ -124,9 +126,16 @@ openisec-hpcr-drtl-demo/
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request.
+This repository is published as a reference implementation and public demo of the HPCR-DRTL framework.
 
-This project is maintained by [Openisec](https://openisec.com).
+We welcome feedback, questions, use cases, bug reports, and suggestions through GitHub Issues.
+
+However, we are not actively accepting external code contributions or pull requests at this stage.
+The core implementation is maintained by the Openisec maintainer.
+
+You are welcome to fork this repository under the terms of the Apache License 2.0 and experiment with your own version.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
