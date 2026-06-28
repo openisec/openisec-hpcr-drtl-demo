@@ -1,4 +1,4 @@
-﻿alembic==1.16.1
+alembic==1.16.1
 annotated-types==0.7.0
 anyio==4.13.0
 argon2-cffi==23.1.0
@@ -23,7 +23,6 @@ google-cloud-core==2.6.0
 google-cloud-resource-manager==1.17.0
 google-cloud-storage==2.19.0
 google-crc32c==1.8.0
-google-genai==2.8.0
 google-resumable-media==2.10.0
 googleapis-common-protos==1.75.0
 greenlet==3.5.1

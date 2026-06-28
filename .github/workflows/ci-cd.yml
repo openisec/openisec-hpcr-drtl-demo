@@ -100,8 +100,8 @@ jobs:
             --platform=managed \
             --service-account=cloud-run-runtime-demo@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
-            --set-secrets=DATABASE_URL=db-connection-string-demo:latest,SECRET_KEY=session-secret-demo:latest,GEMINI_API_KEY=gemini-api-key-demo:latest \
-            --set-env-vars=DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=global,GEMINI_MODEL=gemini-2.5-flash \
+            --set-secrets=DATABASE_URL=db-connection-string-demo:latest,SECRET_KEY=session-secret-demo:latest \
+            --set-env-vars=DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=asia-northeast1,GEMINI_MODEL=gemini-2.5-flash \
             --vpc-connector=openisec-connector-demo \
             --vpc-egress=private-ranges-only \
             --allow-unauthenticated \

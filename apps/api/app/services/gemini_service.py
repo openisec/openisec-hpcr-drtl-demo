@@ -1,8 +1,8 @@
 import json
 import re
 from typing import Optional
-from google import genai
-from google.genai import types
+import vertexai
+from vertexai.generative_models import GenerativeModel, GenerationConfig
 
 from app.core.config import get_settings
 
@@ -85,8 +85,12 @@ async def analyze_with_gemini(
     history_context: Optional[str] = None,
     decision_type: Optional[str] = None,
 ) -> dict:
-    # Google AI Studio API Key authentication
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    # Vertex AI authentication (uses service account / Workload Identity)
+    vertexai.init(project=settings.VERTEX_PROJECT, location=settings.VERTEX_LOCATION)
+    model = GenerativeModel(
+        model_name=settings.GEMINI_MODEL,
+        system_instruction=_SYSTEM_PROMPT,
+    )
 
     user_message = f"Decision query: {query}"
     if history_context:
@@ -94,18 +98,15 @@ async def analyze_with_gemini(
     if decision_type:
         user_message += f"\n\nDecision category: {decision_type}"
 
-    config = types.GenerateContentConfig(
-        system_instruction=_SYSTEM_PROMPT,
+    generation_config = GenerationConfig(
         temperature=0.3,
         max_output_tokens=2048,
         response_mime_type="application/json",
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
     )
 
-    response = await client.aio.models.generate_content(
-        model=settings.GEMINI_MODEL,
+    response = await model.generate_content_async(
         contents=user_message,
-        config=config,
+        generation_config=generation_config,
     )
 
     raw_text = response.text.strip()

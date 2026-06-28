@@ -24,8 +24,9 @@ services:
       - DATABASE_URL=postgresql+psycopg2://appuser:password@db:5432/openisec
       - SECRET_KEY=${SECRET_KEY:-change-this-to-a-random-secret-key}
       - DEBUG=true
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=gemini-2.5-flash
+      - VERTEX_PROJECT=${VERTEX_PROJECT:-}
+      - VERTEX_LOCATION=${VERTEX_LOCATION:-asia-northeast1}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - PORT=8080
     depends_on:
       db:

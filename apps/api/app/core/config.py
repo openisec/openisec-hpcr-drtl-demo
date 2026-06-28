@@ -14,8 +14,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     ALGORITHM: str = "HS256"
-    # Gemini API (Google AI Studio)
-    GEMINI_API_KEY: str = ""
+    # Gemini API (Vertex AI)
+    VERTEX_PROJECT: str = ""
+    VERTEX_LOCATION: str = "asia-northeast1"
     GEMINI_MODEL: str = "gemini-2.5-flash"
     # HPCR-DRTL Volume limits (base)
     HISTORY_MAX_CHARS: int = 300
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
     # Rate limiting
     AUTH_RATE_LIMIT_PER_MINUTE: int = 10
     API_RATE_LIMIT_PER_MINUTE: int = 60
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

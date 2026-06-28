@@ -50,7 +50,7 @@ The AI (Gemini) handles H, P, C, R — the human retains ownership of D, R, T, L
 | Frontend | Next.js 15, TypeScript, Tailwind CSS |
 | Backend | FastAPI (Python 3.12), SQLAlchemy, Alembic |
 | Database | PostgreSQL |
-| AI | Google Gemini 2.5 Flash (google-genai SDK) |
+| AI | Google Gemini 2.5 Flash (Vertex AI SDK) |
 | Auth | Argon2id + JWT Bearer tokens |
 | CI/CD | GitHub Actions / Snyk / pytest |
 
@@ -72,7 +72,7 @@ The AI (Gemini) handles H, P, C, R — the human retains ownership of D, R, T, L
 ### Prerequisites
 
 - Docker Desktop
-- Google Gemini API Key ([Get one free](https://aistudio.google.com/apikey))
+- GCP Project with Vertex AI API enabled
 
 ### Quick Start
 
@@ -83,7 +83,7 @@ cd openisec-hpcr-drtl-demo
 
 # 2. Configure API environment
 cp apps/api/.env.example apps/api/.env
-# Edit apps/api/.env and set your GEMINI_API_KEY
+# Edit apps/api/.env and set your VERTEX_PROJECT
 
 # 3. Start all services
 docker compose up -d
