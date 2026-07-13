@@ -5,7 +5,7 @@ from typing import Optional
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from jose import JWTError, jwt
+import jwt
 
 from app.core.config import get_settings
 
@@ -38,7 +38,7 @@ def create_access_token(subject: str, extra: dict | None = None) -> str:
 def decode_access_token(token: str) -> Optional[dict]:
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError:
+    except jwt.PyJWTError:
         return None
 
 
