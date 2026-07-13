@@ -40,6 +40,10 @@ jobs:
       - name: Snyk - Web Node scan
         run: snyk test --file=apps/web/package.json --severity-threshold=high
         continue-on-error: true
+      - name: Snyk monitor (update dashboard)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: snyk monitor --all-projects
+        continue-on-error: true
 
   api-test:
     name: API Tests
