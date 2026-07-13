@@ -32,6 +32,12 @@ jobs:
           python-version: "3.12"
       - name: Install Snyk
         run: npm install -g snyk
+      - name: Install Python dependencies (for accurate scan)
+        working-directory: apps/api
+        run: pip install -r requirements.txt
+      - name: Install Node dependencies (for accurate scan)
+        working-directory: apps/web
+        run: npm install
       - name: Snyk Auth
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
       - name: Snyk - API Python scan
