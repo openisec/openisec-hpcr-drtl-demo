@@ -3,18 +3,19 @@ resource "google_sql_database_instance" "main" {
   database_version = "POSTGRES_15"
   region           = var.region
   project          = var.project_id
-  deletion_protection = false
+  deletion_protection = true
 
   depends_on = [google_service_networking_connection.private_vpc_connection]
 
   settings {
-    tier              = var.db_tier
-    availability_type = "ZONAL"
+    tier                        = var.db_tier
+    availability_type           = "REGIONAL"
+    deletion_protection_enabled = true
 
     backup_configuration {
       enabled    = true
       start_time = "18:00"
-      point_in_time_recovery_enabled = false
+      point_in_time_recovery_enabled = true
     }
 
     ip_configuration {
