@@ -158,7 +158,7 @@ jobs:
             --service-account=cloud-run-runtime-demo@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
             --set-secrets=DATABASE_URL=db-connection-string-demo:latest,SECRET_KEY=session-secret-demo:latest,RESEND_API_KEY=resend-api-key-demo:latest \
-            --set-env-vars="DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=asia-northeast1,GEMINI_MODEL=gemini-2.5-flash,MAIL_FROM=Openisec <noreply@mail.openisec.com>,ADDITIONAL_CORS_ORIGINS=https://demo.hpcr.openisec.com" \
+            --set-env-vars="DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=asia-northeast1,GEMINI_MODEL=gemini-2.5-flash,MAIL_FROM=Openisec <noreply@mail.openisec.com>,FRONTEND_URL=https://demo.hpcr.openisec.com" \
             --vpc-connector=openisec-connector-demo \
             --vpc-egress=private-ranges-only \
             --allow-unauthenticated \
@@ -199,7 +199,7 @@ jobs:
           echo "WEB_URL=$WEB_URL" >> $GITHUB_ENV
           gcloud run services update openisec-api-demo \
             --region=${{ env.REGION }} \
-            --update-env-vars=FRONTEND_URL=$WEB_URL \
+            --update-env-vars=ADDITIONAL_CORS_ORIGINS=$WEB_URL \
             --quiet
 
       - name: Create or Update DB Migration Job
