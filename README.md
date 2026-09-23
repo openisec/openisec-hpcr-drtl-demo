@@ -1,13 +1,13 @@
 # HPCR-DRTL — AI Decision Governance Framework
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/openisec/openisec-hpcr-drtl-demo/releases)
+[![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](https://github.com/openisec/openisec-hpcr-drtl-demo/releases)
 
 **HPCR-DRTL** is the first open-source module from [Openisec](https://openisec.com), published as a public demo and reference implementation of an AI-powered decision governance framework.
 
 > Openisec is not limited to HPCR-DRTL. HPCR-DRTL is the first public module to demonstrate Openisec's approach to AI-supported, human-accountable decision governance.
 
-> 🌐 **Live Demo**: https://openisec-web-demo-slec5tgzia-an.a.run.app
+> 🌐 **Live Demo**: https://demo.hpcr.openisec.com
 >
 > To request a demo account, please contact: **admin@openisec.com**
 
@@ -39,7 +39,13 @@ The AI (Gemini) handles H, P, C, R — the human retains ownership of D, R, T, L
 - 📋 Flexible Pro/Con bullet points that adjust based on the number of options
 - 💡 Records the human's rationale (Reason) for accepting, modifying, or rejecting AI recommendations
 - 📅 Target date management for implementation planning
-- 🔐 Bearer Token authentication, input guardrails, and PII masking
+- 🏢 Self-registration with email verification, multi-organization membership, and org switching
+- 👥 Admin settings: organization management, member invitation/roles, risk score thresholds
+- ✅ Pre-approval workflow (awaiting approval → approved/rejected) for high-risk decisions
+- 🧾 Full audit logging (authentication events and organization activity) with CSV export
+- 🔐 Cookie-based session authentication (HttpOnly, Secure, SameSite), Argon2id password hashing, input guardrails, and PII masking
+- 🛡️ Model Armor integration (prompt injection / jailbreak detection) as defense-in-depth alongside regex-based input validation
+- 🚦 Per-endpoint rate limiting
 
 ---
 
@@ -47,23 +53,27 @@ The AI (Gemini) handles H, P, C, R — the human retains ownership of D, R, T, L
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 15, TypeScript, Tailwind CSS |
+| Frontend | Next.js 16, TypeScript, Tailwind CSS |
 | Backend | FastAPI (Python 3.12), SQLAlchemy, Alembic |
-| Database | PostgreSQL |
-| AI | Google Gemini 2.5 Flash (Vertex AI SDK) |
-| Auth | Argon2id + JWT Bearer tokens |
-| CI/CD | GitHub Actions / Snyk / pytest |
+| Database | PostgreSQL (schema-per-organization multi-tenancy) |
+| AI | Google Gemini 2.5 Flash (Vertex AI SDK), Model Armor |
+| Auth | Argon2id + JWT, HttpOnly cookie sessions |
+| CI/CD | GitHub Actions / Snyk / pytest / OWASP ZAP (DAST) |
 
 ---
 
 ## Security
 
 - OWASP LLM Top 10:2025 compliant input guardrails
+- Model Armor (prompt injection / jailbreak detection) as defense-in-depth
 - Snyk SAST / SCA scanning in CI/CD
+- OWASP ZAP baseline (DAST) scanning in CI/CD
 - Password hashing with Argon2id
-- All secrets managed via environment variables (never committed to repository)
+- All secrets managed via Secret Manager / environment variables (never committed to repository)
 - SQL injection protection via SQLAlchemy ORM
 - PII masking before AI processing
+- Full authentication and organization activity audit logging
+- Per-endpoint rate limiting
 
 ---
 
@@ -102,10 +112,10 @@ openisec-hpcr-drtl-demo/
 │   ├── api/          # FastAPI backend
 │   │   ├── app/
 │   │   │   ├── api/v1/endpoints/   # REST endpoints
-│   │   │   ├── core/               # Config, DB, security
+│   │   │   ├── core/               # Config, DB, security, audit, rate limiting, provisioning
 │   │   │   ├── models/             # SQLAlchemy models
 │   │   │   ├── schemas/            # Pydantic schemas
-│   │   │   └── services/           # Gemini AI service
+│   │   │   └── services/           # Gemini AI, mail, Model Armor services
 │   │   └── migrations/             # Alembic migrations
 │   └── web/          # Next.js frontend
 ├── docs/             # Architecture docs & ADRs
@@ -117,9 +127,11 @@ openisec-hpcr-drtl-demo/
 
 ## Roadmap
 
-- [ ] **v0.2.0** — User self-registration & organization management
-- [ ] **v0.3.0** — Approval workflow & RBAC
-- [ ] **v0.4.0** — Google Search Grounding for real-time context
+- [x] **v0.2.0** — User self-registration & organization management
+- [x] **v0.3.0** — Approval workflow & RBAC
+- [x] **v0.4.0** — Audit logging, rate limiting, Model Armor integration
+- [x] **v0.5.0** — Multi-organization membership & org switching, admin settings UI
+- [ ] **v0.6.0** — Google Search Grounding for real-time context
 - [ ] **v1.0.0** — Multi-tenant SaaS with billing integration
 
 ---
