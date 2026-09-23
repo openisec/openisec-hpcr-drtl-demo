@@ -1,5 +1,6 @@
 import re
 import secrets
+import string
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -83,3 +84,28 @@ def mask_pii(text: str) -> str:
 
 def generate_token(length: int = 32) -> str:
     return secrets.token_urlsafe(length)
+
+def generate_temp_password(length: int = 16) -> str:
+    """
+    Generates a random password satisfying RegisterRequest's password
+    policy (12+ chars, upper, lower, digit, special char), for admin-
+    issued member accounts. The member must change it on first login
+    (see User.must_change_password).
+    """
+    upper = string.ascii_uppercase
+    lower = string.ascii_lowercase
+    digits = string.digits
+    special = "!@#$%^&*"
+
+    required = [
+        secrets.choice(upper),
+        secrets.choice(lower),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+    all_chars = upper + lower + digits + special
+    remaining = [secrets.choice(all_chars) for _ in range(length - len(required))]
+
+    password_chars = required + remaining
+    secrets.SystemRandom().shuffle(password_chars)
+    return "".join(password_chars)

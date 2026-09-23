@@ -16,8 +16,8 @@ variable "environment" {
   default     = "demo"
 
   validation {
-    condition     = contains(["dev", "stg", "demo"], var.environment)
-    error_message = "environment must be dev, stg, or demo."
+    condition     = contains(["dev", "stg", "prd", "demo"], var.environment)
+    error_message = "environment must be dev, stg, prd, or demo."
   }
 }
 
@@ -34,7 +34,7 @@ variable "db_name" {
 }
 
 variable "vpc_network_id" {
-  description = "VPC network ID for private IP"
+  description = "VPC network ID for private IP (unused in demo; cloudsql.tf references google_compute_network.vpc.id from this environment's own vpc.tf directly)"
   type        = string
   default     = null
 }

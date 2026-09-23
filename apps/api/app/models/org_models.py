@@ -1,17 +1,14 @@
 """
-Org-scoped schema models  Eone schema per organization: org_{uuid}.
-"""
-# TODO: [PHASE-2] Multi-tenant schema implementation
-# Currently ORG_SCHEMA = "org_schema" is a placeholder.
-# In Phase 2, each organization should have its own PostgreSQL schema: org_{uuid}.
-# Implementation steps:
-#   1. On org creation, run: CREATE SCHEMA org_{uuid}
-#   2. Run migration 0002 against that schema
-#   3. deps.py get_org_db() dynamically sets search_path to org_{uuid}
-#   4. ORG_SCHEMA should be replaced with dynamic schema name at runtime
-# See: docs/adr/001-multitenant-schema.md
-ORG_SCHEMA = "public"  # TODO: [PHASE-2] Replace with dynamic org_{uuid} schema
+Org-scoped schema models - one schema per organization: org_{uuid}.
 
+These models intentionally omit an explicit schema= in __table_args__.
+Without an explicit schema, SQLAlchemy emits unqualified table names,
+which means the active PostgreSQL search_path determines which schema
+is actually queried. This is what allows app.core.database.tenant_schema()
+to route requests to org_{uuid} via SET LOCAL search_path.
+
+See: docs/adr/001-multitenant-schema.md
+"""
 import uuid
 from datetime import datetime
 
@@ -32,17 +29,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
 
-ORG_SCHEMA = "org_schema"
 
-
-# ---------------------------------------------------------------------------
-# Decision Types
-# ---------------------------------------------------------------------------
 class DecisionType(Base, TimestampMixin):
     __tablename__ = "decision_types"
     __table_args__ = (
         UniqueConstraint("org_id", "code", name="uq_decision_types_org_code"),
-        {"schema": "public"},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -53,12 +44,8 @@ class DecisionType(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
-# ---------------------------------------------------------------------------
-# AI Agent Registry
-# ---------------------------------------------------------------------------
 class Agent(Base, TimestampMixin):
     __tablename__ = "agents"
-    __table_args__ = {"schema": "public"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -78,17 +65,13 @@ class Agent(Base, TimestampMixin):
     )
 
 
-# ---------------------------------------------------------------------------
-# Agent Policies
-# ---------------------------------------------------------------------------
 class AgentPolicy(Base, TimestampMixin):
     __tablename__ = "agent_policies"
-    __table_args__ = {"schema": "public"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("public.agents.id"),
+        ForeignKey("agents.id"),
         nullable=False,
     )
     policy_type: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -103,12 +86,8 @@ class AgentPolicy(Base, TimestampMixin):
     )
 
 
-# ---------------------------------------------------------------------------
-# Preapproval Center
-# ---------------------------------------------------------------------------
 class Preapproval(Base, TimestampMixin):
     __tablename__ = "preapprovals"
-    __table_args__ = {"schema": "public"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -122,12 +101,8 @@ class Preapproval(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
-# ---------------------------------------------------------------------------
-# Decision Sessions
-# ---------------------------------------------------------------------------
 class Session(Base, TimestampMixin):
     __tablename__ = "sessions"
-    __table_args__ = {"schema": "public"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -137,6 +112,8 @@ class Session(Base, TimestampMixin):
     agent_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     actor_type: Mapped[str] = mapped_column(String(20), nullable=False, default="Human")
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft")
+    # 下書き状態でのクエリ入力途中内容を保持するためのフィールド(D. ログ閲覧改善)
+    draft_query: Mapped[str | None] = mapped_column(String(4000), nullable=True)
 
     messages: Mapped[list["Message"]] = relationship(
         "Message",
@@ -150,9 +127,6 @@ class Session(Base, TimestampMixin):
     )
 
 
-# ---------------------------------------------------------------------------
-# HPCRDTL Message  Ecore table
-# ---------------------------------------------------------------------------
 class Message(Base, TimestampMixin):
     __tablename__ = "messages"
     __table_args__ = (
@@ -161,36 +135,35 @@ class Message(Base, TimestampMixin):
         CheckConstraint("char_length(decision) <= 1000", name="chk_messages_decision_len"),
         CheckConstraint("reason IS NULL OR char_length(reason) <= 2000", name="chk_messages_reason_len"),
         CheckConstraint("log IS NULL OR char_length(log) <= 500", name="chk_messages_log_len"),
+        CheckConstraint(
+            "ai_recommendation_action IS NULL OR ai_recommendation_action IN ('adopted', 'modified', 'rejected')",
+            name="chk_messages_ai_recommendation_action_values",
+        ),
         CheckConstraint("risk_score >= 0 AND risk_score <= 100", name="chk_messages_risk_score_range"),
         CheckConstraint("response_confidence_score >= 0 AND response_confidence_score <= 100", name="chk_messages_confidence_range"),
-        {"schema": "public"},
+        CheckConstraint("addendum IS NULL OR char_length(addendum) <= 2000", name="chk_messages_addendum_len"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("public.sessions.id"),
+        ForeignKey("sessions.id"),
         nullable=False,
     )
-    # User's original question
     query: Mapped[str | None] = mapped_column(String(4000), nullable=True)
-    # H
     history: Mapped[str] = mapped_column(String(2000), nullable=False)
-    # P
     pro: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
-    # C
     con: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
-    # R
     recommendation: Mapped[str] = mapped_column(String(1000), nullable=False)
-    # D
     decision: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     decision_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # R (Reason)
+    # AIの推奨に対するユーザーの判定(採用/修正/見送り)。UI表示は日本語だが、
+    # 将来の多言語UI対応を見据え、DBには英語コードで保存する。
+    # decision/reason と同じく「進行中(未確定)」と「確定」で共用するカラム。
+    ai_recommendation_action: Mapped[str | None] = mapped_column(String(20), nullable=True)
     reason: Mapped[str | None] = mapped_column(String(2000), nullable=True)
-    # T
     target_date: Mapped[datetime | None] = mapped_column(sa.Date(), nullable=True)
-    # L
     log: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     actor_type: Mapped[str] = mapped_column(String(20), nullable=False, default="Human")
@@ -213,6 +186,11 @@ class Message(Base, TimestampMixin):
     prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # G. 完了(closed)/終了(archived)後の追記専用フィールド。
+    # decision/reason等の確定フィールドは編集不可のため、追記のみここに残す。
+    addendum: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    addendum_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     session: Mapped["Session"] = relationship(
         "Session",
         back_populates="messages",
@@ -220,17 +198,13 @@ class Message(Base, TimestampMixin):
     )
 
 
-# ---------------------------------------------------------------------------
-# Approval Inbox
-# ---------------------------------------------------------------------------
 class Approval(Base, TimestampMixin):
     __tablename__ = "approvals"
-    __table_args__ = {"schema": "public"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("public.sessions.id"),
+        ForeignKey("sessions.id"),
         nullable=False,
     )
     message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
@@ -249,12 +223,8 @@ class Approval(Base, TimestampMixin):
     )
 
 
-# ---------------------------------------------------------------------------
-# Safety Events
-# ---------------------------------------------------------------------------
 class SafetyEvent(Base):
     __tablename__ = "safety_events"
-    __table_args__ = {"schema": "public"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -268,20 +238,19 @@ class SafetyEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
-# ---------------------------------------------------------------------------
-# Audit Log
-# ---------------------------------------------------------------------------
 class AuditLog(Base):
     __tablename__ = "audit_logs"
-    __table_args__ = {"schema": "public"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    actor_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     actor_type: Mapped[str] = mapped_column(String(20), nullable=False, default="human")
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     resource_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     resource_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # 「AさんがBさんのロールを変更した」等、操作対象のユーザー。
+    target_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     before_state: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     after_state: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)

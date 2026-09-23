@@ -1,29 +1,43 @@
 import { create } from "zustand";
-import { setToken } from "@/lib/api";
+
+interface Membership {
+  organization_id: string;
+  organization_name: string;
+  role: string;
+}
 
 interface User {
-  user_id: string;
+  id: string;
   email: string;
   full_name: string;
-  organization_id: string;
+  is_platform_admin: boolean;
+  must_change_password: boolean;
+  memberships: Membership[];
+  active_org_id: string | null;
 }
 
 interface AuthStore {
   user: User | null;
-  setUser: (user: User | null) => void;
-  setAuth: (user: User, token: string) => void;
+  mustChangePassword: boolean;
+  hydrated: boolean;
+  setUser: (user: User) => void;
   clearAuth: () => void;
+  setMustChangePassword: (value: boolean) => void;
+  setHydrated: (value: boolean) => void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
-  setUser: (user) => set({ user }),
-  setAuth: (user, token) => {
-    setToken(token);
-    set({ user });
-  },
+  mustChangePassword: false,
+  hydrated: false,
+  setUser: (user) =>
+    set({
+      user,
+      mustChangePassword: user.must_change_password,
+    }),
   clearAuth: () => {
-    setToken(null);
-    set({ user: null });
+    set({ user: null, mustChangePassword: false });
   },
+  setMustChangePassword: (value) => set({ mustChangePassword: value }),
+  setHydrated: (value) => set({ hydrated: value }),
 }));

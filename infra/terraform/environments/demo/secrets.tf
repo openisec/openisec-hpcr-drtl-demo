@@ -1,17 +1,21 @@
+# Resend API Key（手動で値を設定する）
 resource "google_secret_manager_secret" "resend_api_key" {
   secret_id = "resend-api-key-${var.environment}"
   project   = var.project_id
+
   replication {
-  auto {}
-}
+    auto {}
+  }
 }
 
+# Vertex AI / Gemini（ADC経由のため不要だが、将来のAPI Key方式に備えて）
 resource "google_secret_manager_secret" "session_secret" {
   secret_id = "session-secret-${var.environment}"
   project   = var.project_id
-   replication {
-  auto {}
-}
+
+  replication {
+    auto {}
+  }
 }
 
 resource "random_password" "session_secret" {

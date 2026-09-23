@@ -21,6 +21,12 @@ resource "google_project_iam_member" "cloud_run_sa_secret" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+resource "google_project_iam_member" "cloud_run_sa_modelarmor" {
+  project = var.project_id
+  role    = "roles/modelarmor.user"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
 resource "google_project_iam_member" "cloud_run_sa_sql" {
   project = var.project_id
   role    = "roles/cloudsql.client"
@@ -35,7 +41,7 @@ resource "google_project_iam_member" "cloud_run_sa_logging" {
 
 resource "google_service_account" "cicd_sa" {
   account_id   = "sa-cicd-${var.environment}"
-  display_name = "CI/CD Service Account (${var.environment})"
+  display_name = "sa-cicd-${var.environment}"
   project      = var.project_id
 }
 
@@ -45,15 +51,9 @@ resource "google_project_iam_member" "cicd_sa_run" {
   member  = "serviceAccount:${google_service_account.cicd_sa.email}"
 }
 
-resource "google_project_iam_member" "cicd_sa_storage" {
-  project = var.project_id
-  role    = "roles/storage.admin"
-  member  = "serviceAccount:${google_service_account.cicd_sa.email}"
-}
-
 resource "google_project_iam_member" "cicd_sa_artifactregistry" {
   project = var.project_id
-  role    = "roles/artifactregistry.admin"
+  role    = "roles/artifactregistry.writer"
   member  = "serviceAccount:${google_service_account.cicd_sa.email}"
 }
 
@@ -68,6 +68,7 @@ resource "google_artifact_registry_repository" "main" {
   repository_id = "openisec-demo"
   format        = "DOCKER"
   project       = var.project_id
+  description   = "Openisec demo container registry"
 }
 
 resource "google_iam_workload_identity_pool" "github" {
@@ -80,21 +81,29 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
   workload_identity_pool_provider_id = "github-provider"
   project                            = var.project_id
+  display_name                       = "GitHub Provider"
 
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
     "attribute.repository" = "assertion.repository"
+    "attribute.actor"      = "assertion.actor"
   }
 
-  attribute_condition = "assertion.repository=='openisec/openisec-hpcr-drtl-demo'"
+  attribute_condition = "assertion.repository=='openisec/openisec-hpcr-drtl-demo' || assertion.repository=='openisec/openisec-homepage-demo'"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }
 }
 
-resource "google_service_account_iam_member" "cicd_wif_binding" {
+resource "google_service_account_iam_member" "cicd_wif_binding_hpcr_drtl" {
   service_account_id = google_service_account.cicd_sa.name
-  role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/openisec/openisec-hpcr-drtl-demo"
+  role                = "roles/iam.workloadIdentityUser"
+  member              = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/openisec/openisec-hpcr-drtl-demo"
+}
+
+resource "google_service_account_iam_member" "cicd_wif_binding_homepage" {
+  service_account_id = google_service_account.cicd_sa.name
+  role                = "roles/iam.workloadIdentityUser"
+  member              = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/openisec/openisec-homepage-demo"
 }

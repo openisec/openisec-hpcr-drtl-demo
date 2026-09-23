@@ -2,7 +2,7 @@
 
 Revision ID: b2c3d4e5f6a7
 Revises: a1b2c3d4e5f6
-Create Date: 2026-06-22
+Create Date: 2026-06-21
 
 Changes:
     - messages: add reason column (human's reason for adopting/modifying/rejecting AI recommendation)

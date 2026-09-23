@@ -17,75 +17,120 @@ permissions:
   id-token: write
 
 jobs:
+  # ----------------------------------------------------------
+  # Job 1: Snyk Security Scan
+  # ----------------------------------------------------------
   snyk-scan:
     name: Snyk Security Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
+
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
       - name: Install Snyk
         run: npm install -g snyk
+
       - name: Install Python dependencies (for accurate scan)
         working-directory: apps/api
         run: pip install -r requirements.txt
+
       - name: Install Node dependencies (for accurate scan)
         working-directory: apps/web
         run: npm install
+
       - name: Snyk Auth
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
       - name: Snyk - API Python scan
         run: snyk test --file=apps/api/requirements.txt --severity-threshold=high
         continue-on-error: true
+
       - name: Snyk - Web Node scan
         run: snyk test --file=apps/web/package.json --severity-threshold=high
         continue-on-error: true
+
       - name: Snyk monitor (update dashboard)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: snyk monitor --all-projects
         continue-on-error: true
 
+  # ----------------------------------------------------------
+  # Job 2: API Tests
+  # ----------------------------------------------------------
   api-test:
     name: API Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: openisec_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg2://postgres:testpass@localhost:5434/openisec_test
+      SECRET_KEY: ci-test-secret-key-not-for-production-use
+      COOKIE_SECURE: "false"
+      COOKIE_DOMAIN: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
       - name: Install dependencies
         working-directory: apps/api
         run: |
           pip install -r requirements.txt
           pip install pytest pytest-asyncio httpx
+
       - name: Run tests
         working-directory: apps/api
         run: pytest tests/ -v --tb=short
         continue-on-error: true
 
+  # ----------------------------------------------------------
+  # Job 3: Build & Deploy to DEMO
+  # ----------------------------------------------------------
   build-deploy:
     name: Build & Deploy to DEMO
     runs-on: ubuntu-latest
     needs: [snyk-scan, api-test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
       - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER_DEMO }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_DEMO }}
+
       - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
+
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
       - name: Build & Push API image
         working-directory: apps/api
         run: |
@@ -93,6 +138,7 @@ jobs:
           docker build -t $IMAGE .
           docker push $IMAGE
           echo "API_IMAGE=$IMAGE" >> $GITHUB_ENV
+
       - name: Build & Push Web image
         working-directory: apps/web
         run: |
@@ -102,6 +148,7 @@ jobs:
             .
           docker push $IMAGE
           echo "WEB_IMAGE=$IMAGE" >> $GITHUB_ENV
+
       - name: Deploy API to Cloud Run
         run: |
           gcloud run deploy openisec-api-demo \
@@ -110,8 +157,8 @@ jobs:
             --platform=managed \
             --service-account=cloud-run-runtime-demo@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
-            --set-secrets=DATABASE_URL=db-connection-string-demo:latest,SECRET_KEY=session-secret-demo:latest \
-            --set-env-vars=DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=asia-northeast1,GEMINI_MODEL=gemini-2.5-flash \
+            --set-secrets=DATABASE_URL=db-connection-string-demo:latest,SECRET_KEY=session-secret-demo:latest,RESEND_API_KEY=resend-api-key-demo:latest \
+            --set-env-vars="DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=asia-northeast1,GEMINI_MODEL=gemini-2.5-flash,MAIL_FROM=Openisec <noreply@mail.openisec.com>" \
             --vpc-connector=openisec-connector-demo \
             --vpc-egress=private-ranges-only \
             --allow-unauthenticated \
@@ -121,6 +168,7 @@ jobs:
             --cpu=1 \
             --timeout=60 \
             --quiet
+
       - name: Get API URL
         run: |
           API_URL=$(gcloud run services describe openisec-api-demo \
@@ -128,6 +176,7 @@ jobs:
             --format="value(status.url)")
           echo "API_URL=$API_URL" >> $GITHUB_ENV
           echo "API deployed to: $API_URL"
+
       - name: Deploy Web to Cloud Run
         run: |
           gcloud run deploy openisec-web-demo \
@@ -141,6 +190,7 @@ jobs:
             --memory=512Mi \
             --cpu=1 \
             --quiet
+
       - name: Get Web URL and update API CORS
         run: |
           WEB_URL=$(gcloud run services describe openisec-web-demo \
@@ -149,8 +199,9 @@ jobs:
           echo "WEB_URL=$WEB_URL" >> $GITHUB_ENV
           gcloud run services update openisec-api-demo \
             --region=${{ env.REGION }} \
-            --update-env-vars=CORS_ORIGINS=$WEB_URL \
+            --update-env-vars=FRONTEND_URL=$WEB_URL \
             --quiet
+
       - name: Create or Update DB Migration Job
         run: |
           set +e
@@ -173,12 +224,14 @@ jobs:
               --max-retries=0 \
               --quiet
           fi
+
       - name: Run DB Migration
         run: |
           gcloud run jobs execute openisec-migrate-demo \
             --region=${{ env.REGION }} \
             --wait \
             --quiet
+
       - name: Summary
         run: |
           echo "## Deploy Complete (DEMO)" >> $GITHUB_STEP_SUMMARY
