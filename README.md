@@ -132,7 +132,7 @@ openisec-hpcr-drtl-demo/
 - [x] **v0.4.0** — Audit logging, rate limiting, Model Armor integration
 - [x] **v0.5.0** — Multi-organization membership & org switching, admin settings UI
 - [ ] **v0.6.0** — Google Search Grounding for real-time context
-- [ ] **v1.0.0** — Multi-tenant SaaS with billing integration
+- [ ] **v1.0.0** — Multi-tenant platform
 
 ---
 
