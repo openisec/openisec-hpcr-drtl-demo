@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # 送信可能になり、盗聴・中間者攻撃のリスクが生じる。
     COOKIE_DOMAIN: str = ".openisec.com"
     COOKIE_SECURE: bool = True 
+    # ログインCookieの名前。dev/stg/prd/demoはドメインが .openisec.com 配下で
+    # Cookieを共有するため、同じ名前だと別環境へのログインで互いに上書きされ、
+    # 署名鍵が違う他環境のトークンで401になる。環境ごとに異なる名前を
+    # 環境変数で指定する(例: access_token_dev / access_token_stg)。
+    COOKIE_NAME: str = "access_token"
     # Vertex AI
     VERTEX_PROJECT: str = "openisec-dev-488314"
     VERTEX_LOCATION: str = "global"

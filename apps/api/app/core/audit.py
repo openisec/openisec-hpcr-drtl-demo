@@ -58,7 +58,14 @@ class OrgAuditAction:
     AUDIT_LOG_EXPORTED = "audit.exported"
 
 
-def build_message_snapshot(db: Session, msg, session_title: str, session_status: str) -> dict:
+def build_message_snapshot(
+    db: Session,
+    msg,
+    session_title: str,
+    session_status: str,
+    curiosity: str | None = None,
+    prior_thinking: str | None = None,
+) -> dict:
     """
     セッション詳細ページに実際に表示される内容一式を、監査ログの
     before_state/after_state用にJSON化可能な辞書として組み立てる。
@@ -96,6 +103,10 @@ def build_message_snapshot(db: Session, msg, session_title: str, session_status:
     return {
         "title": session_title,
         "status": session_status,
+        # CTQP: C(きっかけ)/T(事前の考え)/Q(解くべき問い)。既存セッションは
+        # C/Tが無いためNone。
+        "curiosity": curiosity,
+        "prior_thinking": prior_thinking,
         "query": msg.query,
         "history": msg.history,
         "pro": msg.pro or [],

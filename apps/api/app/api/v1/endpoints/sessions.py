@@ -145,6 +145,8 @@ def _to_session_response(db, session: OrgSession, current_user, org) -> SessionR
         created_at=session.created_at,
         created_by=str(session.created_by),
         draft_query=session.draft_query,
+        curiosity=session.curiosity,
+        prior_thinking=session.prior_thinking,
         target_date=ordered_messages[-1].target_date if ordered_messages else None,
         messages=message_outs,
         viewer_is_approver=_is_approver(db, current_user.id, org.id),
@@ -450,7 +452,7 @@ def list_approval_queue(ctx=Depends(get_org_db)):
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
-def get_session(session_id: str, ctx=Depends(get_org_db)):
+def get_session(session_id: uuid.UUID, ctx=Depends(get_org_db)):
     db, current_user, org = ctx
 
     # F. セッション共有(read-only): テナントスキーマ自体が組織単位で分離
@@ -471,7 +473,7 @@ def get_session(session_id: str, ctx=Depends(get_org_db)):
 
 @router.patch("/{session_id}/draft", response_model=SessionResponse)
 def update_draft_query(
-    session_id: str,
+    session_id: uuid.UUID,
     payload: DraftQueryUpdate,
     ctx=Depends(get_org_db),
 ):
@@ -495,6 +497,11 @@ def update_draft_query(
         )
 
     session.draft_query = payload.draft_query
+    # CTQP: C/T は指定された場合のみ更新(None=既存値を維持)。
+    if payload.curiosity is not None:
+        session.curiosity = payload.curiosity
+    if payload.prior_thinking is not None:
+        session.prior_thinking = payload.prior_thinking
 
     # commit 前に、応答に必要な値を全てスナップショットしておく。
     # (create_session と同じ理由: commit 後は search_path が public に
@@ -505,6 +512,8 @@ def update_draft_query(
     created_at = session.created_at
     created_by = session.created_by
     draft_query = session.draft_query
+    curiosity = session.curiosity
+    prior_thinking = session.prior_thinking
     ordered_messages = sorted(session.messages, key=lambda m: m.created_at)
     message_snapshots = [_to_message_out(db, m) for m in ordered_messages]
 
@@ -518,6 +527,8 @@ def update_draft_query(
         created_at=created_at,
         created_by=str(created_by),
         draft_query=draft_query,
+        curiosity=curiosity,
+        prior_thinking=prior_thinking,
         target_date=message_snapshots[-1].target_date if message_snapshots else None,
         messages=message_snapshots,
         viewer_is_approver=_is_approver(db, current_user.id, org.id),
@@ -543,7 +554,7 @@ class CloseSessionRequest(BaseModel):
 
 @router.post("/{session_id}/close", response_model=SessionResponse)
 def close_session(
-    session_id: str,
+    session_id: uuid.UUID,
     payload: CloseSessionRequest,
     request: Request,
     ctx=Depends(get_org_db),
@@ -594,6 +605,8 @@ def close_session(
     created_at = session.created_at
     created_by = session.created_by
     draft_query = session.draft_query
+    curiosity = session.curiosity
+    prior_thinking = session.prior_thinking
     ordered_messages = sorted(session.messages, key=lambda m: m.created_at)
     message_snapshots = [_to_message_out(db, m) for m in ordered_messages]
 
@@ -633,6 +646,8 @@ def close_session(
         created_at=created_at,
         created_by=str(created_by),
         draft_query=draft_query,
+        curiosity=curiosity,
+        prior_thinking=prior_thinking,
         target_date=message_snapshots[-1].target_date if message_snapshots else None,
         messages=message_snapshots,
         viewer_is_approver=_is_approver(db, current_user.id, org.id),
@@ -641,7 +656,7 @@ def close_session(
 
 
 @router.delete("/{session_id}", response_model=DeleteSessionResponse)
-def delete_session(session_id: str, request: Request, ctx=Depends(get_org_db)):
+def delete_session(session_id: uuid.UUID, request: Request, ctx=Depends(get_org_db)):
     """
     テストデータの蓄積等でどのログを残すべきか分かりにくくなることを
     避けるため、意思決定ログは基本的に作成者が削除できる。ただし、
@@ -692,7 +707,14 @@ def delete_session(session_id: str, request: Request, ctx=Depends(get_org_db)):
             actor_email=current_user.email,
             resource_type="session",
             resource_id=session.id,
-            before_state=build_message_snapshot(db, ordered_messages[-1], session.title, session.status),
+            before_state=build_message_snapshot(
+                db,
+                ordered_messages[-1],
+                session.title,
+                session.status,
+                curiosity=session.curiosity,
+                prior_thinking=session.prior_thinking,
+            ),
             after_state=None,
             request=request,
         )

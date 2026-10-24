@@ -92,14 +92,24 @@ export const getSharedSessions = (params: SharedSessionListParams = {}) =>
 
 export const getSession = (sessionId: string) => api.get(`/sessions/${sessionId}`);
 
-export const saveDraftQuery = (sessionId: string, draft_query: string) =>
-  api.patch(`/sessions/${sessionId}/draft`, { draft_query });
+// CTQP: draft_query=Q(解くべき問い)、curiosity=C(きっかけ)、prior_thinking=T(事前の考え)。
+export const saveDraftQuery = (
+  sessionId: string,
+  draft_query: string,
+  curiosity?: string,
+  prior_thinking?: string,
+) => api.patch(`/sessions/${sessionId}/draft`, { draft_query, curiosity, prior_thinking });
 
 export const createSession = (title: string) =>
   api.post("/sessions", { title });
 
-export const createMessage = (sessionId: string, query: string) =>
-  api.post(`/sessions/${sessionId}/messages`, { query });
+// CTQP: C/T は保存・表示されるとともに、AI分析にもQと併せて構造化して渡される。
+export const createMessage = (
+  sessionId: string,
+  query: string,
+  curiosity: string,
+  prior_thinking: string,
+) => api.post(`/sessions/${sessionId}/messages`, { query, curiosity, prior_thinking });
 
 export const recordDecision = (
   sessionId: string,

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db, tenant_schema, schema_exists
 from app.core.provisioning import provision_org_schema
 from datetime import datetime, timezone, timedelta
+from app.core.config import get_settings
 from app.core.security import decode_access_token
 from app.models.public_models import User, LoginSession, Organization, UserOrgMembership
 
@@ -21,7 +22,7 @@ IDLE_TIMEOUT = timedelta(minutes=30)
 ABSOLUTE_SESSION_MAX = timedelta(hours=12)
 EXTEND_THROTTLE = timedelta(minutes=5)
 
-ACCESS_TOKEN_COOKIE_NAME = "access_token"
+ACCESS_TOKEN_COOKIE_NAME = get_settings().COOKIE_NAME
 
 
 def get_current_session_and_user(

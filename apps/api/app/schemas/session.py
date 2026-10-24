@@ -3,6 +3,9 @@ from typing import Optional
 from datetime import datetime, date
 import uuid
 
+# CTQP: C(きっかけ)/T(事前の考え)の最大文字数(DBカラム長と一致させる)。
+CTQP_FIELD_MAX = 1000
+
 
 class SessionCreate(BaseModel):
     title: str
@@ -15,17 +18,41 @@ class SessionCreate(BaseModel):
             raise ValueError("Title must be 200 characters or less")
         return v.strip()
 
+    @field_validator("decision_type_id")
+    @classmethod
+    def validate_decision_type_id(cls, v: Optional[str]) -> Optional[str]:
+        # UUID列との比較に使うため、UUIDとして不正な値は入口で422にする
+        # (検証しないとDB比較で例外になり、500エラーになる)。
+        if v is None or v == "":
+            return v
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError("decision_type_id must be a valid UUID")
+        return v
+
 
 class DraftQueryUpdate(BaseModel):
     """下書き状態のセッションに対する、入力途中クエリの自動保存用スキーマ"""
 
     draft_query: str
+    # CTQP: C(きっかけ)/T(事前の考え)の入力途中内容。未指定(None)の場合は
+    # 既存値を変更しない。指定された場合は空文字を含めてそのまま保存する。
+    curiosity: Optional[str] = None
+    prior_thinking: Optional[str] = None
 
     @field_validator("draft_query")
     @classmethod
     def validate_draft_query(cls, v: str) -> str:
         if len(v) > 4000:
             raise ValueError("draft_query must be 4000 characters or less")
+        return v
+
+    @field_validator("curiosity", "prior_thinking")
+    @classmethod
+    def validate_ctqp_draft(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and len(v) > CTQP_FIELD_MAX:
+            raise ValueError(f"must be {CTQP_FIELD_MAX} characters or less")
         return v
 
 
@@ -71,6 +98,9 @@ class SessionResponse(BaseModel):
     created_at: datetime
     created_by: Optional[str] = None
     draft_query: Optional[str] = None
+    # CTQP: C(きっかけ)/T(事前の考え)。既存セッションはNone(空欄/非表示)。
+    curiosity: Optional[str] = None
+    prior_thinking: Optional[str] = None
     # ダッシュボード一覧でステータス列の左側に表示するための、
     # 紐づくメッセージのTarget(実施ターゲット日)。
     target_date: Optional[date] = None

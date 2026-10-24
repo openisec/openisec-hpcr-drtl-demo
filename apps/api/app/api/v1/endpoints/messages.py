@@ -13,6 +13,7 @@ from app.core.security import validate_input, mask_pii
 from app.core.audit import record_audit_log, build_message_snapshot, OrgAuditAction
 from app.models.org_models import Session as OrgSession, Message, AuditLog, Approval
 from app.models.public_models import User, UserOrgMembership
+from app.schemas.session import CTQP_FIELD_MAX
 from app.services.gemini_service import analyze_with_gemini
 from app.services.model_armor_service import check_prompt_injection, PromptBlockedError
 from app.services.mail_service import send_risk_alert_email, send_approval_request_email, send_rejection_email
@@ -48,9 +49,25 @@ def _session_url(session_id) -> str:
 # Schemas
 # ---------------------------------------------------------------------------
 class MessageRequest(BaseModel):
+    # CTQP: query=Q(Questioning=解くべき問い)。AI分析の中心的な問い。
     query: str
+    # CTQP: C(Curiosity=きっかけ)とT(Thinking=事前の考え)は必須入力。
+    # セッションに記録・表示するとともに、AI分析にも構造化して渡す
+    # (Cは背景・経緯、Tは利用者の事前認識=未検証の仮説として扱わせる)。
+    curiosity: str
+    prior_thinking: str
     history_context: Optional[str] = None
     decision_type: Optional[str] = None
+
+    @field_validator("curiosity", "prior_thinking")
+    @classmethod
+    def validate_ctqp_field(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("must not be empty")
+        if len(v) > CTQP_FIELD_MAX:
+            raise ValueError(f"must be {CTQP_FIELD_MAX} characters or less")
+        return v
 
 
 AI_RECOMMENDATION_ACTIONS = {"adopted", "modified", "rejected"}
@@ -146,15 +163,29 @@ async def create_message(
     if not is_valid:
         raise HTTPException(status_code=422, detail=f"Input validation failed: {reason}")
 
+    # CTQP: C/T もQと同じ正規表現ガードレールで検証する(AIに渡し、DB保存・
+    # 画面表示もされるため)。
+    for ctqp_value in (payload.curiosity, payload.prior_thinking):
+        ctqp_valid, ctqp_reason = validate_input(ctqp_value, max_chars=CTQP_FIELD_MAX)
+        if not ctqp_valid:
+            raise HTTPException(status_code=422, detail=f"Input validation failed: {ctqp_reason}")
+
     # Input Guardrail (LLM01): Model Armor ML-based prompt injection /
     # jailbreak detection, as a second layer on top of the regex check above.
+    # CTQP: C/T もAI分析に渡すため、Qと同じ検査を通す。3項目を連結して1回で
+    # 検査する(項目をまたぐ指示の埋め込みも検知でき、API呼び出しも1回で済む)。
     try:
-        await check_prompt_injection(payload.query)
+        await check_prompt_injection(
+            "\n\n".join((payload.query, payload.curiosity, payload.prior_thinking))
+        )
     except PromptBlockedError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
-    # PII masking before sending to AI (LLM02)
+    # PII masking before sending to AI (LLM02)。C/T もAIに渡すためマスキングする
+    # (DBにはユーザー入力のまま保存し、AIに渡す分のみマスキングする)。
     safe_query = mask_pii(payload.query)
+    safe_curiosity = mask_pii(payload.curiosity)
+    safe_prior_thinking = mask_pii(payload.prior_thinking)
     safe_history = mask_pii(payload.history_context) if payload.history_context else None
 
     # 注意: Gemini呼び出しは、DBへの書き込み(add/commit)より前に行う。
@@ -171,6 +202,8 @@ async def create_message(
             query=safe_query,
             history_context=safe_history,
             decision_type=payload.decision_type,
+            curiosity=safe_curiosity,
+            prior_thinking=safe_prior_thinking,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI analysis failed: {str(e)[:200]}")
@@ -200,6 +233,9 @@ async def create_message(
         decision_type=payload.decision_type,
     )
     session.status = "open"
+    # CTQP: C/T はセッション単位で、分析成功時の一度きりのcommitに含めて保存する。
+    session.curiosity = payload.curiosity
+    session.prior_thinking = payload.prior_thinking
     db.add(session)
     db.add(msg)
     # flush() はトランザクションを終了させない(search_path はまだ有効)ため、
@@ -219,6 +255,8 @@ async def create_message(
     confidence_factors_snapshot = msg.response_confidence_limiting_factors
     log_snapshot = msg.log
     session_title_snapshot = session.title
+    curiosity_snapshot = session.curiosity
+    prior_thinking_snapshot = session.prior_thinking
 
     # G. リスクスコアが組織の閾値以上と判明した時点で、承認者へ内容確認
     # メールを送る(この時点ではまだ承認不要。ステータスはopenのまま)。
@@ -243,6 +281,8 @@ async def create_message(
     return {
         "id": str(msg_id),
         "query": payload.query,
+        "curiosity": curiosity_snapshot,
+        "prior_thinking": prior_thinking_snapshot,
         "session_id": str(session_id),
         "history": history_snapshot,
         "pro": pro_snapshot,
@@ -328,7 +368,11 @@ def record_decision(
             resource_type="session",
             resource_id=session_id,
             before_state=None,
-            after_state=build_message_snapshot(db, msg, session_title_snapshot, new_status),
+            after_state=build_message_snapshot(
+                db, msg, session_title_snapshot, new_status,
+                curiosity=sess.curiosity if sess else None,
+                prior_thinking=sess.prior_thinking if sess else None,
+            ),
             request=request,
         )
 
@@ -504,7 +548,11 @@ def approve_message(
         resource_type="session",
         resource_id=session_id,
         before_state=None,
-        after_state=build_message_snapshot(db, msg, sess.title, "completed"),
+        after_state=build_message_snapshot(
+            db, msg, sess.title, "completed",
+            curiosity=sess.curiosity,
+            prior_thinking=sess.prior_thinking,
+        ),
         request=request,
     )
 
@@ -589,7 +637,11 @@ def reject_message(
         resource_type="session",
         resource_id=session_id,
         before_state=None,
-        after_state=build_message_snapshot(db, msg, sess.title, "open"),
+        after_state=build_message_snapshot(
+            db, msg, sess.title, "open",
+            curiosity=sess.curiosity,
+            prior_thinking=sess.prior_thinking,
+        ),
         request=request,
     )
 

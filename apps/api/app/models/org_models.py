@@ -114,6 +114,11 @@ class Session(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft")
     # 下書き状態でのクエリ入力途中内容を保持するためのフィールド(D. ログ閲覧改善)
     draft_query: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+    # CTQP: C(Curiosity=きっかけ) / T(Thinking=事前の考え)。Q(Questioning=
+    # 解くべき問い)は messages.query に保存される。C/T はQとともにAI分析にも
+    # 構造化して渡される。既存セッションには値が無いためNULL許可(後方互換)。
+    curiosity: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    prior_thinking: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     messages: Mapped[list["Message"]] = relationship(
         "Message",

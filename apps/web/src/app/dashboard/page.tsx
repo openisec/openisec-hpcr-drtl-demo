@@ -429,6 +429,10 @@ function DashboardContent() {
           <p className="text-slate-400">
             新しい意思決定の分析を開始するか、過去のセッションを確認してください。
           </p>
+          {/* CTQP紹介文(2〜3行程度に収める)。 */}
+          <p className="text-slate-500 text-sm mt-2 leading-relaxed">
+            また、意思決定セッションには、独自に提唱・実践している「CTQP」（Curiosity：好奇心、Thinking：考え、Questioning：解くべき問い、Proactivity：自ら行動）の観点も取り入れています。皆さんの思考の視点や行動の指針としても、お役立ていただければ幸いです。
+          </p>
         </div>
 
         <div className="mb-6 flex items-center gap-3 text-sm">

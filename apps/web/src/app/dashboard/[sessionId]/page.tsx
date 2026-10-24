@@ -1,8 +1,7 @@
 "use client";
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createMessage, recordDecision, getSession, saveDraftQuery, saveDraftDecision, approveMessage, rejectMessage, closeSession, deleteSession } from "@/lib/api";
-import { useAuthStore } from "@/store/auth";
+import { createMessage, recordDecision, getSession, saveDraftQuery, saveDraftDecision, approveMessage, rejectMessage, closeSession, deleteSession } from "@/lib/api";import { useAuthStore } from "@/store/auth";
 
 // AIの推奨に対する判定。UI表示は日本語、保存値(DB)は英語コード。
 const AI_RECOMMENDATION_OPTIONS: { value: string; label: string }[] = [
@@ -10,6 +9,35 @@ const AI_RECOMMENDATION_OPTIONS: { value: string; label: string }[] = [
   { value: "modified", label: "修正" },
   { value: "rejected", label: "見送り" },
 ];
+
+// CTQP: C(きっかけ)/T(事前の考え)用。初期表示は1行で、入力内容に応じて
+// maxHeightPx まで自動的に高さが伸び、それを超えた場合はスクロール表示する。
+function AutoGrowTextarea({
+  value,
+  maxHeightPx = 160,
+  className = "",
+  ...rest
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  value: string;
+  maxHeightPx?: number;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, maxHeightPx)}px`;
+    el.style.overflowY = el.scrollHeight > maxHeightPx ? "auto" : "hidden";
+  }, [value, maxHeightPx]);
+  return <textarea ref={ref} rows={1} value={value} className={className} {...rest} />;
+}
+
+// CTQP: 画面表示用ラベル。Qの旧称「意思決定クエリ」は、今後Questioning(解くべき問い)として表記する。
+const CTQP_LABELS = {
+  curiosity: "きっかけ（Curiosity 好奇心）",
+  priorThinking: "事前の考え（Thinking 考え）",
+  query: "意思決定クエリ（Questioning 解くべき問い）",
+} as const;
 
 interface HpcrdtlMessage {
   id: string;
@@ -49,6 +77,9 @@ export default function SessionPage({
   const router = useRouter();
   const currentUser = useAuthStore((s) => s.user);
   const [query, setQuery] = useState("");
+  // CTQP: C(きっかけ)/T(事前の考え)。セッションに保存・表示され、AI分析にもQと併せて構造化して渡される。
+  const [curiosity, setCuriosity] = useState("");
+  const [priorThinking, setPriorThinking] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<HpcrdtlMessage | null>(null);
@@ -96,6 +127,9 @@ export default function SessionPage({
       setSessionCreatedBy(sessionData.created_by ?? null);
       setSessionStatus(sessionData.status);
       setViewerIsApprover(Boolean(sessionData.viewer_is_approver));
+      // CTQP: 既存(CTQP導入前)のセッションはC/Tが無い(null)ため空文字で復元し、表示側で非表示にする。
+      setCuriosity(sessionData.curiosity ?? "");
+      setPriorThinking(sessionData.prior_thinking ?? "");
       const existing = sessionData.messages?.[0] as HpcrdtlMessage | undefined;
       if (existing) {
         setQuery(existing.query ?? "");
@@ -134,7 +168,7 @@ export default function SessionPage({
     if (isRestoring.current || message || !isOwner) return;
     if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
     draftSaveTimer.current = setTimeout(() => {
-      saveDraftQuery(sessionId, query).catch(() => {
+      saveDraftQuery(sessionId, query, curiosity, priorThinking).catch(() => {
         // 自動保存の失敗はユーザー操作を妨げないよう静かに無視する
       });
     }, 1000);
@@ -142,7 +176,7 @@ export default function SessionPage({
       if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [query, curiosity, priorThinking]);
 
   // Decision/Reason/Target の入力途中内容も、同様に1秒デバウンスで自動保存する。
   // 分析済み(message あり = セッションは「進行中」)かつ未確定(decided
@@ -165,10 +199,11 @@ export default function SessionPage({
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || message || !isOwner) return;
+    // CTQP: C・T・Q はすべて必須入力。
+    if (!curiosity.trim() || !priorThinking.trim() || !query.trim() || message || !isOwner) return;
     setAnalyzing(true);
     try {
-      const res = await createMessage(sessionId, query.trim());
+      const res = await createMessage(sessionId, query.trim(), curiosity.trim(), priorThinking.trim());
       setMessage(res.data);
       setSessionStatus("open");
     } catch {
@@ -307,18 +342,72 @@ export default function SessionPage({
           <h2 className="font-semibold mb-4">意思決定クエリ</h2>
           {message || !isOwner ? (
             // A案: 分析済みセッションは再分析不可。他人のセッションもread-only。
-            <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
-              {query || "(クエリなし)"}
-            </p>
+            // CTQP: C/T/Q を入力内容のまま、ラベル付きで表示する。
+            // CTQP導入前の既存セッションにはC/Tが無いため、その項目は非表示にする。
+            <div className="space-y-4">
+              {curiosity && (
+                <div>
+                  <h3 className="text-sm font-medium text-slate-400 mb-1">{CTQP_LABELS.curiosity}</h3>
+                  <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{curiosity}</p>
+                </div>
+              )}
+              {priorThinking && (
+                <div>
+                  <h3 className="text-sm font-medium text-slate-400 mb-1">{CTQP_LABELS.priorThinking}</h3>
+                  <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{priorThinking}</p>
+                </div>
+              )}
+              <div>
+                <h3 className="text-sm font-medium text-slate-400 mb-1">{CTQP_LABELS.query}</h3>
+                <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                  {query || "(クエリなし)"}
+                </p>
+              </div>
+            </div>
           ) : (
-            <form onSubmit={handleAnalyze} className="space-y-3">
-              <textarea
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="判断が必要な状況や課題を入力してください..."
-                rows={4}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 resize-none"
-              />
+            <form onSubmit={handleAnalyze} className="space-y-4">
+              <div className="space-y-1">
+                <label htmlFor="ctqp-curiosity" className="text-sm font-medium text-slate-300 block">
+                  {CTQP_LABELS.curiosity}
+                </label>
+                <AutoGrowTextarea
+                  id="ctqp-curiosity"
+                  value={curiosity}
+                  onChange={(e) => setCuriosity(e.target.value)}
+                  placeholder="例：いつ、どのメルマガで何の記事を読んだか／お客様からの問い合わせ内容"
+                  maxLength={1000}
+                  required
+                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 resize-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="ctqp-prior-thinking" className="text-sm font-medium text-slate-300 block">
+                  {CTQP_LABELS.priorThinking}
+                </label>
+                <AutoGrowTextarea
+                  id="ctqp-prior-thinking"
+                  value={priorThinking}
+                  onChange={(e) => setPriorThinking(e.target.value)}
+                  placeholder="例：記事への驚きや疑問、自分の考え／お客様との認識違いの可能性"
+                  maxLength={1000}
+                  required
+                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 resize-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="ctqp-query" className="text-sm font-medium text-slate-300 block">
+                  {CTQP_LABELS.query}
+                </label>
+                <textarea
+                  id="ctqp-query"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="例：記事を踏まえ、解決したい課題を問う／認識違いを生む原因と改善策は何か"
+                  rows={4}
+                  required
+                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 resize-none"
+                />
+              </div>
               <button
                 type="submit"
                 disabled={analyzing}
@@ -418,7 +507,7 @@ export default function SessionPage({
 
             {!decided && isOwner ? (
               <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
-                <h3 className="font-semibold mb-3">Decision — あなたの決定</h3>
+                <h3 className="font-semibold mb-3">Decision — あなたの決定<span className="text-slate-400">（Proactivity 自ら行動）</span></h3>
                 {message.approval_status === "rejected" && (
                   <div className="bg-orange-900/30 border border-orange-700 rounded-lg px-4 py-3 mb-4">
                     <p className="text-orange-300 text-sm font-semibold mb-1">承認者により差し戻されました</p>
@@ -509,7 +598,7 @@ export default function SessionPage({
             ) : (
               <div className="space-y-3">
                 <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
-                  <h3 className="font-semibold mb-2">Decision — あなたの決定</h3>
+                  <h3 className="font-semibold mb-2">Decision — あなたの決定<span className="text-slate-400">（Proactivity 自ら行動）</span></h3>
                   <p className="text-slate-300 text-sm leading-relaxed">{decision}</p>
                 </div>
                 <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
