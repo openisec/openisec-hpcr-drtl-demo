@@ -32,6 +32,25 @@ The AI (Gemini) handles H, P, C, R — the human retains ownership of D, R, T, L
 
 ---
 
+## CTQP — Perspectives for Thinking and Guiding Principles for Action
+
+CTQP represents four guiding keywords for continuous learning, reflection, and practice throughout life.
+
+CTQPは、人生における継続的な学び、振り返り、実践を導く4つのキーワードです。
+
+| Letter | Label | Description (EN) | 説明 (JP) |
+|---|---|---|---|
+| C | Curiosity — 好奇心 | Begin with curiosity. | 好奇心からはじまる |
+| T | Thinking — 考え | Deepen our thinking. | 考えを深める |
+| Q | Questioning — 解くべき問い | Identify the questions that need to be answered to get to the essence. | 解くべき問いによって本質を捉える |
+| P | Proactivity — 自ら行動 | Turn insights into proactive communication and real action. | 積極的なコミュニケーションと実際の行動につなげる |
+
+As we practice CTQP, we make various decisions at every stage. Openisec is an open-source initiative to help individuals, organizations, and society make better decisions with AI. HPCR-DRTL is its first publicly released framework and platform.
+
+CTQPを実践する中で、私たちは各段階でさまざまな意思決定を行います。Openisecは、人、組織、そして社会がAIを活用しながら、より良い意思決定を行うことを支援するオープンソース・イニシアチブです。HPCR-DRTLは、その最初の公開フレームワークおよびプラットフォームです。
+
+---
+
 ## Key Features
 
 - 🤖 AI analysis (Gemini 2.5 Flash) with risk score and confidence evaluation
