@@ -146,6 +146,18 @@ class TestSystemPrompt:
     def test_same_language_rule_kept(self):
         assert "same language as the user query" in _SYSTEM_PROMPT
 
+    def test_language_rule_is_first_and_covers_history(self):
+        """Historyだけ英語になる事象の再発防止: 言語指定を先頭ルールにし、History全文を対象にする。"""
+        rules = _SYSTEM_PROMPT[_SYSTEM_PROMPT.index("CRITICAL RULES:"):_SYSTEM_PROMPT.index("INPUT STRUCTURE")]
+        assert rules.index("0. LANGUAGE") < rules.index("1. Always respond ONLY")
+        assert "history" in rules.split("1. Always respond ONLY")[0]
+
+    def test_history_part_has_no_quoted_english_example_phrase(self):
+        """Historyの指示に英語の例文(引用符付き)を置かない。出力にそのまま転記され、英語化する原因になる。"""
+        history_part = _SYSTEM_PROMPT[_SYSTEM_PROMPT.index('"history":'):_SYSTEM_PROMPT.index('"pro":')]
+        assert "initial view is that" not in history_part.replace("means 'the user's initial view is that ...'", "")
+        assert "same language as the user query" in history_part
+
 
 # ---------------------------------------------------------------------------
 # analyze_with_gemini: モデル呼び出しに渡る内容
