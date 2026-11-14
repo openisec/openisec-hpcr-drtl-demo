@@ -177,23 +177,9 @@ def record_tenant_audit_log(
     db.flush()
 
 
-def get_client_ip(request: Request) -> str | None:
-    """
-    クライアントの実IPアドレスを取得する。
-
-    Cloud Run環境ではリクエストがGoogleのフロントエンドプロキシを経由する
-    ため、request.client.host はプロキシ側のIPになる可能性がある。
-    X-Forwarded-For ヘッダーが付与されていればその先頭値(最初にプロキシへ
-    到達したクライアントのIP)を優先し、無ければ request.client.host に
-    フォールバックする。
-
-    注意: この実装はdev環境での動作確認がまだ済んでいない。Cloud Run上で
-    X-Forwarded-For の値が信頼できる形で渡ってくるか要検証。
-    """
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.client.host if request.client else None
+# 実装は core/client_ip.py(レート制限と共通。X-Forwarded-For の右端から数える)
+# 呼び出し側の import 互換のため、ここから再エクスポートする。
+from app.core.client_ip import get_client_ip  # noqa: E402,F401
 
 
 def get_client_user_agent(request: Request) -> str:

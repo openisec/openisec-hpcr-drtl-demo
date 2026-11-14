@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # Rate limiting
     AUTH_RATE_LIMIT_PER_MINUTE: int = 10
     API_RATE_LIMIT_PER_MINUTE: int = 60
+    # X-Forwarded-For の右端から数えて何番目を実クライアントIPとみなすか。
+    # Cloud Run直=1 / 外部ALB経由=2 / プロキシなし(ローカル)=0。詳細は core/client_ip.py
+    TRUSTED_PROXY_COUNT: int = 1
     # Model Armor (LLM01: prompt injection / jailbreak detection, defense-in-depth
     # alongside the regex-based validate_input() check)
     MODEL_ARMOR_ENABLED: bool = True

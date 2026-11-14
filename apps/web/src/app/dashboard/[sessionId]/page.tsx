@@ -3,6 +3,9 @@ import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createMessage, recordDecision, getSession, saveDraftQuery, saveDraftDecision, approveMessage, rejectMessage, closeSession, deleteSession } from "@/lib/api";import { useAuthStore } from "@/store/auth";
 
+// デバウンス待ちの自動保存。keepalive=true はタブを閉じる/リロードする直前の送信用。
+type PendingSave = ((keepalive?: boolean) => Promise<unknown>) | null;
+
 // AIの推奨に対する判定。UI表示は日本語、保存値(DB)は英語コード。
 const AI_RECOMMENDATION_OPTIONS: { value: string; label: string }[] = [
   { value: "adopted", label: "採用" },
@@ -163,14 +166,21 @@ export default function SessionPage({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  // 下書き入力を1秒デバウンスして自動保存(分析済み・復元直後は保存しない)
+  // 下書き入力を1秒デバウンスして自動保存(分析済み・復元直後は保存しない)。
+  // デバウンス待ちの保存内容は pendingDraftSave に保持しておき、入力直後に
+  // 画面遷移・リロード・タブ移動しても、離れる前に flushPendingSaves() で
+  // 必ず送信する(タイマーを破棄するだけだと、直前の入力が失われるため)。
+  const pendingDraftSave = useRef<PendingSave>(null);
   useEffect(() => {
     if (isRestoring.current || message || !isOwner) return;
     if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    pendingDraftSave.current = (keepalive = false) =>
+      saveDraftQuery(sessionId, query, curiosity, priorThinking, keepalive);
     draftSaveTimer.current = setTimeout(() => {
-      saveDraftQuery(sessionId, query, curiosity, priorThinking).catch(() => {
-        // 自動保存の失敗はユーザー操作を妨げないよう静かに無視する
-      });
+      const save = pendingDraftSave.current;
+      pendingDraftSave.current = null;
+      // 自動保存の失敗はユーザー操作を妨げないよう静かに無視する
+      save?.().catch(() => {});
     }, 1000);
     return () => {
       if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
@@ -183,19 +193,58 @@ export default function SessionPage({
   // でない)の間だけ対象。「下書き」(分析前・message なし)段階では
   // そもそも message が存在しないため、この自動保存は発火しない。
   const decisionDraftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingDecisionSave = useRef<PendingSave>(null);
   useEffect(() => {
     if (isRestoring.current || !message || decided || !isOwner) return;
     if (decisionDraftSaveTimer.current) clearTimeout(decisionDraftSaveTimer.current);
+    pendingDecisionSave.current = (keepalive = false) =>
+      saveDraftDecision(sessionId, message.id, decision, aiRecommendationAction, reason, targetDate, keepalive);
     decisionDraftSaveTimer.current = setTimeout(() => {
-      saveDraftDecision(sessionId, message.id, decision, aiRecommendationAction, reason, targetDate).catch(() => {
-        // 自動保存の失敗はユーザー操作を妨げないよう静かに無視する
-      });
+      const save = pendingDecisionSave.current;
+      pendingDecisionSave.current = null;
+      save?.().catch(() => {});
     }, 1000);
     return () => {
       if (decisionDraftSaveTimer.current) clearTimeout(decisionDraftSaveTimer.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decision, aiRecommendationAction, reason, targetDate]);
+
+  // デバウンス待ちの自動保存を、直ちに送信する(参照(ref)のみを使うため、
+  // どの描画時点のものを呼んでも同じ結果になる)。
+  const flushPendingSaves = (keepalive = false) => {
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    if (decisionDraftSaveTimer.current) clearTimeout(decisionDraftSaveTimer.current);
+    const saves = [pendingDraftSave.current, pendingDecisionSave.current];
+    pendingDraftSave.current = null;
+    pendingDecisionSave.current = null;
+    saves.forEach((save) => save?.(keepalive).catch(() => {}));
+  };
+
+  // 保存待ちを破棄する(分析・Log の成功時: その内容は各リクエストで保存済みのため)。
+  const discardPendingSaves = () => {
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    if (decisionDraftSaveTimer.current) clearTimeout(decisionDraftSaveTimer.current);
+    pendingDraftSave.current = null;
+    pendingDecisionSave.current = null;
+  };
+
+  // 入力直後に離れても、直前の入力を失わない:
+  //  - 画面遷移(「後で決定する」・戻る等 = このページのアンマウント): 通常送信
+  //  - リロード/タブを閉じる(pagehide)・タブ移動/最小化(visibilitychange): keepalive送信
+  useEffect(() => {
+    const onPageHide = () => flushPendingSaves(true);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushPendingSaves(true);
+    };
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      flushPendingSaves();
+    };
+  }, []);
 
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,6 +253,7 @@ export default function SessionPage({
     setAnalyzing(true);
     try {
       const res = await createMessage(sessionId, query.trim(), curiosity.trim(), priorThinking.trim());
+      discardPendingSaves();
       setMessage(res.data);
       setSessionStatus("open");
     } catch {
@@ -226,6 +276,7 @@ export default function SessionPage({
     setActionError("");
     try {
       const res = await recordDecision(sessionId, message.id, decision.trim(), aiRecommendationAction, reason.trim(), targetDate);
+      discardPendingSaves();
       setDecided(true);
       setSessionStatus(res.data.session_status ?? "completed");
     } catch {

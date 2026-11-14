@@ -95,6 +95,17 @@ class DecisionRequest(BaseModel):
             raise ValueError("reason must not be empty")
         return v
 
+    @field_validator("target_date")
+    @classmethod
+    def validate_target_date(cls, v: str) -> str:
+        # 不正な日付は、後段の date.fromisoformat() で ValueError(=500)になる前に
+        # 入力エラー(422)として弾く。
+        try:
+            date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("target_date must be a valid date in YYYY-MM-DD format")
+        return v
+
 
 class DraftDecisionUpdate(BaseModel):
     """Autosave for in-progress decision/ai_recommendation_action/reason/target_date, before Log is pressed."""
@@ -113,6 +124,19 @@ class DraftDecisionUpdate(BaseModel):
             raise ValueError(
                 f"ai_recommendation_action must be one of {sorted(AI_RECOMMENDATION_ACTIONS)}"
             )
+        return v
+
+    @field_validator("target_date")
+    @classmethod
+    def validate_target_date(cls, v: Optional[str]) -> Optional[str]:
+        # 自動保存では未選択(空文字)も許容する(None として扱う)。値がある場合は
+        # 日付として解釈できること(不正値は500ではなく422にする)。
+        if not v:
+            return None
+        try:
+            date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("target_date must be a valid date in YYYY-MM-DD format")
         return v
 
 

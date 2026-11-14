@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -11,7 +11,7 @@ import time
 
 from app.core.config import get_settings
 from app.api.v1.router import api_router
-from app.core.rate_limit import limiter
+from app.core.rate_limit import default_rate_limit, limiter
 
 # Root logger defaults to WARNING, which silently drops logger.info() calls
 # throughout the app (e.g. app.services.model_armor_service's "which filter
@@ -89,7 +89,11 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+app.include_router(
+    api_router,
+    prefix=settings.API_V1_PREFIX,
+    dependencies=[Depends(default_rate_limit)],
+)
 
 
 @app.get("/health")

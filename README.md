@@ -53,7 +53,7 @@ CTQPを実践する中で、私たちは各段階でさまざまな意思決定�
 
 ## Key Features
 
-- 🤖 AI analysis (Gemini 2.5 Flash) with risk score and confidence evaluation
+- 🤖 AI analysis (Google Gemini) with risk score and confidence evaluation
 - 📏 Dynamic character limits based on query length
 - 📋 Flexible Pro/Con bullet points that adjust based on the number of options
 - 💡 Records the human's rationale (Reason) for accepting, modifying, or rejecting AI recommendations
@@ -75,7 +75,7 @@ CTQPを実践する中で、私たちは各段階でさまざまな意思決定�
 | Frontend | Next.js 16, TypeScript, Tailwind CSS |
 | Backend | FastAPI (Python 3.12), SQLAlchemy, Alembic |
 | Database | PostgreSQL (schema-per-organization multi-tenancy) |
-| AI | Google Gemini 2.5 Flash (Vertex AI SDK), Model Armor |
+| AI | Google Gemini (Google Gen AI SDK), Model Armor |
 | Auth | Argon2id + JWT, HttpOnly cookie sessions |
 | CI/CD | GitHub Actions / Snyk / pytest / OWASP ZAP (DAST) |
 
@@ -83,9 +83,9 @@ CTQPを実践する中で、私たちは各段階でさまざまな意思決定�
 
 ## Security
 
-- OWASP LLM Top 10:2025 compliant input guardrails
+- Input guardrails based on the OWASP Top 10 for LLM Applications
 - Model Armor (prompt injection / jailbreak detection) as defense-in-depth
-- Snyk SAST / SCA scanning in CI/CD
+- Snyk SAST / SCA / IaC scanning in CI/CD
 - OWASP ZAP baseline (DAST) scanning in CI/CD
 - Password hashing with Argon2id
 - All secrets managed via Secret Manager / environment variables (never committed to repository)

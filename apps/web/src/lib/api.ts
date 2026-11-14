@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { type AxiosRequestConfig } from "axios";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL + "/api/v1",
@@ -92,13 +92,27 @@ export const getSharedSessions = (params: SharedSessionListParams = {}) =>
 
 export const getSession = (sessionId: string) => api.get(`/sessions/${sessionId}`);
 
+// 自動保存を、タブを閉じる・リロードする直前に送るためのオプション。
+// 通常のXHRはページ破棄と同時に中断されるが、keepalive付きfetchは破棄後も
+// リクエストが完了する。画面遷移(SPA内)のときは通常送信で十分なため指定しない。
+const KEEPALIVE_CONFIG: AxiosRequestConfig = {
+  adapter: "fetch",
+  fetchOptions: { keepalive: true },
+};
+
 // CTQP: draft_query=Q(解くべき問い)、curiosity=C(きっかけ)、prior_thinking=T(事前の考え)。
 export const saveDraftQuery = (
   sessionId: string,
   draft_query: string,
   curiosity?: string,
   prior_thinking?: string,
-) => api.patch(`/sessions/${sessionId}/draft`, { draft_query, curiosity, prior_thinking });
+  keepalive = false,
+) =>
+  api.patch(
+    `/sessions/${sessionId}/draft`,
+    { draft_query, curiosity, prior_thinking },
+    keepalive ? KEEPALIVE_CONFIG : undefined,
+  );
 
 export const createSession = (title: string) =>
   api.post("/sessions", { title });
@@ -131,13 +145,13 @@ export const saveDraftDecision = (
   decision: string,
   ai_recommendation_action: string,
   reason: string,
-  target_date: string
-) => api.patch(`/sessions/${sessionId}/messages/${messageId}/draft-decision`, {
-  decision,
-  ai_recommendation_action,
-  reason,
-  target_date,
-});
+  target_date: string,
+  keepalive = false,
+) => api.patch(
+  `/sessions/${sessionId}/messages/${messageId}/draft-decision`,
+  { decision, ai_recommendation_action, reason, target_date },
+  keepalive ? KEEPALIVE_CONFIG : undefined,
+);
 
 export const approveMessage = (sessionId: string, messageId: string, comment?: string) =>
   api.post(`/sessions/${sessionId}/messages/${messageId}/approve`, { comment });

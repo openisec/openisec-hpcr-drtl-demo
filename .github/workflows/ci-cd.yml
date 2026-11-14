@@ -50,13 +50,50 @@ jobs:
       - name: Snyk Auth
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
-      - name: Snyk - API Python scan
-        run: snyk test --file=apps/api/requirements.txt --severity-threshold=high
-        continue-on-error: true
+      # 判定ルール(全スキャン共通):
+      #   exit 0 = 指摘なし / exit 1 = しきい値(high)以上の指摘あり → CIを失敗させる
+      #   exit 2以上 = スキャン自体が実行できなかった(月間テスト上限・機能未有効化・通信障害など)
+      #                → 警告のみ。上限到達でCI全体が止まらないようにするため。
+      #   警告が出た場合は、スキャンが行われていないので Snyk の画面で原因を確認すること。
 
-      - name: Snyk - Web Node scan
-        run: snyk test --file=apps/web/package.json --severity-threshold=high
-        continue-on-error: true
+      - name: Snyk SCA - API Python dependencies
+        run: |
+          set +e
+          snyk test --file=apps/api/requirements.txt --severity-threshold=high
+          rc=$?
+          if [ $rc -eq 1 ]; then echo "::error::Snyk SCA (api) found high or critical issues"; exit 1; fi
+          if [ $rc -ge 2 ]; then echo "::warning::Snyk SCA (api) did not run (exit $rc)"; fi
+          exit 0
+
+      - name: Snyk SCA - Web Node dependencies
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          snyk test --file=apps/web/package.json --severity-threshold=high
+          rc=$?
+          if [ $rc -eq 1 ]; then echo "::error::Snyk SCA (web) found high or critical issues"; exit 1; fi
+          if [ $rc -ge 2 ]; then echo "::warning::Snyk SCA (web) did not run (exit $rc)"; fi
+          exit 0
+
+      - name: Snyk Code (SAST) - source code
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          snyk code test --severity-threshold=high
+          rc=$?
+          if [ $rc -eq 1 ]; then echo "::error::Snyk Code (SAST) found high severity issues"; exit 1; fi
+          if [ $rc -ge 2 ]; then echo "::warning::Snyk Code (SAST) did not run (exit $rc). Check that Snyk Code is enabled for the org"; fi
+          exit 0
+
+      - name: Snyk IaC - Terraform
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          snyk iac test infra/terraform --severity-threshold=high
+          rc=$?
+          if [ $rc -eq 1 ]; then echo "::error::Snyk IaC found high severity misconfigurations"; exit 1; fi
+          if [ $rc -ge 2 ]; then echo "::warning::Snyk IaC did not run (exit $rc)"; fi
+          exit 0
 
       - name: Snyk monitor (update dashboard)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
