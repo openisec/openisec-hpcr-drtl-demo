@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # Vertex AI
     VERTEX_PROJECT: str = "openisec-dev-488314"
     VERTEX_LOCATION: str = "global"
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.8-flash"
     # Mail (Resend)
     RESEND_API_KEY: str = ""
     MAIL_FROM: str = "Openisec <noreply@mail.openisec.com>"

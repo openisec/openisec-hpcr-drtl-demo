@@ -142,7 +142,6 @@ jobs:
       - name: Run tests
         working-directory: apps/api
         run: pytest tests/ -v --tb=short
-        continue-on-error: true
 
   # ----------------------------------------------------------
   # Job 3: Build & Deploy to DEMO
@@ -231,7 +230,7 @@ jobs:
             --service-account=cloud-run-runtime-demo@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-cloudsql-instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:openisec-db-demo \
             --set-secrets=DATABASE_URL=db-connection-string-demo:latest,SECRET_KEY=session-secret-demo:latest,RESEND_API_KEY=resend-api-key-demo:latest \
-            --set-env-vars="DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=asia-northeast1,GEMINI_MODEL=gemini-2.5-flash,MAIL_FROM=Openisec <noreply@mail.openisec.com>,FRONTEND_URL=https://demo.hpcr.openisec.com,COOKIE_NAME=access_token_demo" \
+            --set-env-vars="DEBUG=false,VERTEX_PROJECT=${{ env.PROJECT_ID }},VERTEX_LOCATION=global,GEMINI_MODEL=gemini-3.8-flash,MAIL_FROM=Openisec <noreply@mail.openisec.com>,FRONTEND_URL=https://demo.hpcr.openisec.com,COOKIE_NAME=access_token_demo" \
             --vpc-connector=openisec-connector-demo \
             --vpc-egress=private-ranges-only \
             --allow-unauthenticated \

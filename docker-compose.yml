@@ -25,8 +25,8 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-this-to-a-random-secret-key}
       - DEBUG=true
       - VERTEX_PROJECT=${VERTEX_PROJECT:-}
-      - VERTEX_LOCATION=${VERTEX_LOCATION:-asia-northeast1}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - VERTEX_LOCATION=${VERTEX_LOCATION:-global}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.8-flash}
       - PORT=8080
     depends_on:
       db:
