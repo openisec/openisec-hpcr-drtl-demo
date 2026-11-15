@@ -2,8 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc \
+# 全依存パッケージが wheel(コンパイル済み)で提供されるため、gcc / libpq-dev は不要。
+# 不要なパッケージを入れないことで、OS 側の脆弱性(krb5・cyrus-sasl 等)の持ち込みを避ける。
+# apt-get upgrade で、ベースイメージ公開後に出た OS パッケージの修正(zlib 等)を取り込む。
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
